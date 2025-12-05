@@ -1,0 +1,7 @@
+{
+  "name": "RedSaver - 小红书无水印下载",
+  "description": "极简工具：一键解析小红书帖子，智能AI重命名，批量下载无水印高清原图。",
+  "requestFramePermissions": [
+    "clipboard-read"
+  ]
+}
