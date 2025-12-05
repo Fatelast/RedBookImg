@@ -12,10 +12,7 @@ export const fetchBlobWithRetry = async (url: string): Promise<Blob> => {
   // Proxy Pool Strategy
   const proxies = [
     // 1. WSRV: Strongest image processing proxy. 
-    // TUNED FOR MAX QUALITY: q=100 (Max quality), output=png (Lossless) or remove output to default to source.
-    // We remove output enforcement to try and get original format if supported, or high quality fallback.
-    // Actually, forcing 'jpg' at 100 is safe for compatibility, but let's try 'png' for lossless or just q=100.
-    // Setting q=100 is the key.
+    // TUNED FOR MAX QUALITY: q=100 (Max quality).
     (u: string) => `https://wsrv.nl/?url=${encodeURIComponent(u)}&q=100&t=${cacheBuster}`,
     
     // 2. CodeTabs: Transparent proxy (Best for 1:1 original quality if it works)
@@ -37,7 +34,6 @@ export const fetchBlobWithRetry = async (url: string): Promise<Blob> => {
     const buildProxyUrl = proxies[i];
     try {
       const proxyUrl = buildProxyUrl(url);
-      // console.log(`Attempting proxy ${i + 1}/${proxies.length}: ${proxyUrl.substring(0, 50)}...`);
       
       const response = await fetch(proxyUrl, {
         cache: 'no-store',
@@ -64,7 +60,6 @@ export const fetchBlobWithRetry = async (url: string): Promise<Blob> => {
 
       return blob; // Success!
     } catch (err) {
-      // console.warn(`Proxy ${i + 1} failed for ${url.substring(0, 30)}...`, err);
       lastError = err;
       // Progressive delay: wait longer after each failure
       await delay(1000 + (i * 500)); 
@@ -84,15 +79,62 @@ export const parseXhsLink = async (text: string): Promise<XhsPost> => {
   }
 
   try {
-    // 2. Fetch HTML via Proxy
-    const proxyUrl = `${CORS_PROXY}${encodeURIComponent(targetUrl)}`;
-    const response = await fetch(proxyUrl);
+    // 2. Fetch HTML via Proxy Pool (Fallback Mechanism)
+    // We try multiple proxies to ensure we get the HTML, prioritizing those that don't forward Mobile UA.
+    
+    const htmlProxies = [
+      {
+        name: 'AllOrigins',
+        url: (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+        type: 'json' // Returns JSON with .contents
+      },
+      {
+        name: 'CodeTabs',
+        url: (u: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+        type: 'text' // Returns raw HTML
+      },
+      {
+        name: 'CorsProxy',
+        url: (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+        type: 'text'
+      }
+    ];
 
-    if (!response.ok) {
-      throw new Error(`网络请求失败: ${response.status}`);
+    let html = '';
+    let fetchError = null;
+
+    for (const proxy of htmlProxies) {
+      try {
+        const proxyUrl = proxy.url(targetUrl);
+        const response = await fetch(proxyUrl);
+        
+        if (!response.ok) {
+          throw new Error(`Proxy ${proxy.name} returned status ${response.status}`);
+        }
+
+        if (proxy.type === 'json') {
+          const data = await response.json();
+          html = data.contents;
+        } else {
+          html = await response.text();
+        }
+
+        // Basic validation that we got something resembling HTML
+        if (html && (html.includes('<html') || html.includes('<!DOCTYPE'))) {
+          break; // Success, exit loop
+        } else {
+           throw new Error(`Proxy ${proxy.name} returned invalid content`);
+        }
+      } catch (e) {
+        console.warn(`HTML Fetch failed via ${proxy.name}:`, e);
+        fetchError = e;
+        // Continue to next proxy
+      }
     }
 
-    const html = await response.text();
+    if (!html) {
+       throw fetchError || new Error("所有代理均无法获取页面数据，请稍后重试");
+    }
 
     // 3. Extract __INITIAL_STATE__ JSON
     const stateMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?})(?=;?\s*<\/script>)/);
@@ -165,7 +207,7 @@ export const parseXhsLink = async (text: string): Promise<XhsPost> => {
     console.error("XHS Service Error:", error);
     const msg = error.message || "解析失败";
     if (msg.includes("Failed to fetch")) {
-      throw new Error("网络请求被拦截，请稍后重试");
+      throw new Error("网络请求被拦截，请尝试切换网络或稍后重试");
     }
     throw error;
   }
