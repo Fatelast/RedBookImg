@@ -2,14 +2,17 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
     <meta name="referrer" content="no-referrer" />
     <title>RedSaver - 无水印下载</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
+      @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap");
       body {
-        font-family: 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+        font-family: "Noto Sans SC", system-ui, -apple-system, sans-serif;
         background-color: #f8f8f8;
         -webkit-tap-highlight-color: transparent;
       }
@@ -28,34 +31,35 @@
           extend: {
             colors: {
               xhs: {
-                red: '#ff2442',
-                dark: '#191919',
-                gray: '#999999',
-                light: '#f5f5f5',
-                bg: '#f8f8f8'
-              }
+                red: "#ff2442",
+                dark: "#191919",
+                gray: "#999999",
+                light: "#f5f5f5",
+                bg: "#f8f8f8",
+              },
             },
             animation: {
-              'bounce-slow': 'bounce 3s infinite',
-              'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-            }
-          }
+              "bounce-slow": "bounce 3s infinite",
+              "pulse-fast": "pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+            },
+          },
+        },
+      };
+    </script>
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://aistudiocdn.com/react@^19.2.1",
+          "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+          "react/": "https://aistudiocdn.com/react@^19.2.1/",
+          "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
+          "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0"
         }
       }
     </script>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "react/": "https://aistudiocdn.com/react@^19.2.1/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0"
-  }
-}
-</script>
-</head>
+  </head>
   <body>
     <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
