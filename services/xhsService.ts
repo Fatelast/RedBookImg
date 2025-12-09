@@ -12,10 +12,7 @@ export const fetchBlobWithRetry = async (url: string): Promise<Blob> => {
   // Proxy Pool Strategy
   const proxies = [
     // 1. WSRV: Strongest image processing proxy. 
-    // TUNED FOR MAX QUALITY: q=100 (Max quality), output=png (Lossless) or remove output to default to source.
-    // We remove output enforcement to try and get original format if supported, or high quality fallback.
-    // Actually, forcing 'jpg' at 100 is safe for compatibility, but let's try 'png' for lossless or just q=100.
-    // Setting q=100 is the key.
+    // TUNED FOR MAX QUALITY: q=100 (Max quality).
     (u: string) => `https://wsrv.nl/?url=${encodeURIComponent(u)}&q=100&t=${cacheBuster}`,
     
     // 2. CodeTabs: Transparent proxy (Best for 1:1 original quality if it works)
@@ -37,7 +34,6 @@ export const fetchBlobWithRetry = async (url: string): Promise<Blob> => {
     const buildProxyUrl = proxies[i];
     try {
       const proxyUrl = buildProxyUrl(url);
-      // console.log(`Attempting proxy ${i + 1}/${proxies.length}: ${proxyUrl.substring(0, 50)}...`);
       
       const response = await fetch(proxyUrl, {
         cache: 'no-store',
@@ -64,7 +60,6 @@ export const fetchBlobWithRetry = async (url: string): Promise<Blob> => {
 
       return blob; // Success!
     } catch (err) {
-      // console.warn(`Proxy ${i + 1} failed for ${url.substring(0, 30)}...`, err);
       lastError = err;
       // Progressive delay: wait longer after each failure
       await delay(1000 + (i * 500)); 

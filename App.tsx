@@ -241,7 +241,7 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Grid - Changed from columns-* (masonry) to grid-* (standard grid) */}
+            {/* Grid - Standard grid for reliable layout */}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {post.images.map(img => (
                 <ImageCard 
@@ -276,7 +276,8 @@ const App: React.FC = () => {
             <div className="flex items-center gap-4 text-sm font-medium">
               <button onClick={toggleSelectAll} className="flex items-center gap-2 hover:text-gray-300 transition-colors">
                 <CheckSquare size={18} className={selectedIds.size === post.images.length ? "text-xhs-red" : "text-gray-400"} />
-                <span>全选 ({selectedIds.size})</span>
+                <span className="hidden xs:inline">全选 ({selectedIds.size})</span>
+                <span className="inline xs:hidden">({selectedIds.size})</span>
               </button>
             </div>
 
@@ -315,7 +316,7 @@ const App: React.FC = () => {
                 <button 
                   onClick={() => handleDownload(false)}
                   disabled={selectedIds.size === 0 || processing.status !== 'idle'}
-                  className="relative overflow-hidden bg-xhs-red hover:bg-red-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-full font-bold transition-all active:scale-95 flex items-center gap-2"
+                  className="relative overflow-hidden bg-xhs-red hover:bg-red-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-full font-bold transition-all active:scale-95 flex items-center gap-2 min-w-[120px] justify-center"
                 >
                   {processing.status === 'downloading' && (
                     <div 
@@ -324,11 +325,11 @@ const App: React.FC = () => {
                     />
                   )}
                   
-                  <div className="relative z-10 flex items-center gap-2">
+                  <div className="relative z-10 flex items-center gap-2 whitespace-nowrap">
                     {processing.status === 'downloading' ? (
                       <>
                         <Loader2 size={18} className="animate-spin" />
-                        <span className="tabular-nums text-sm">
+                        <span className="tabular-nums text-xs sm:text-sm">
                           {downloadProgress}% ({processing.progress}/{processing.total})
                         </span>
                       </>
