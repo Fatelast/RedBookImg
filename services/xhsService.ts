@@ -83,92 +83,133 @@ export const parseXhsLink = async (text: string): Promise<XhsPost> => {
     throw new Error("未检测到有效的小红书链接");
   }
 
-  try {
-    // 2. Fetch HTML via Proxy
-    const proxyUrl = `${CORS_PROXY}${encodeURIComponent(targetUrl)}`;
-    const response = await fetch(proxyUrl);
+  // Proxy Pool for HTML
+  const htmlProxies = [
+    (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    (u: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+    (u: string) => `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(u)}`
+  ];
 
-    if (!response.ok) {
-      throw new Error(`网络请求失败: ${response.status}`);
-    }
+  let lastError: any;
+  let html = '';
 
-    const html = await response.text();
-
-    // 3. Extract __INITIAL_STATE__ JSON
-    const stateMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?})(?=;?\s*<\/script>)/);
-
-    if (!stateMatch) {
-      throw new Error("无法解析帖子数据 (页面结构已变更或被拦截)");
-    }
-
-    const jsonStr = stateMatch[1].replace(/undefined/g, 'null');
-    
-    let state;
+  // 2. Fetch HTML via Proxy Rotation
+  for (let i = 0; i < htmlProxies.length; i++) {
     try {
-      state = JSON.parse(jsonStr);
-    } catch (e) {
-      console.error("JSON Parse Error", e);
-      throw new Error("帖子数据解析异常");
-    }
-
-    // 4. Locate Note Data
-    let note = state.note?.note;
-    if (!note && state.note?.noteDetailMap) {
-       const mapKeys = Object.keys(state.note.noteDetailMap);
-       if (mapKeys.length > 0) {
-         note = state.note.noteDetailMap[mapKeys[0]].note;
-       }
-    }
-
-    if (!note) {
-      throw new Error("未找到笔记详情数据");
-    }
-
-    // 5. Process Images
-    const imageList = note.imageList || [];
-    const images: XhsImage[] = imageList.map((img: any, index: number) => {
-      let originalUrl = img.urlDefault || img.url || '';
+      const proxyUrl = htmlProxies[i](targetUrl);
+      const response = await fetch(proxyUrl);
       
-      // Standardize HTTPS
-      if (originalUrl.startsWith('http://')) {
-        originalUrl = originalUrl.replace('http://', 'https://');
+      if (!response.ok) {
+        throw new Error(`Status ${response.status}`);
       }
 
-      // Clean URL logic:
-      // We ONLY strip the '!' parameters which are used for image processing (resize/watermark).
-      // We MUST PRESERVE the '?' parameters as they often contain authentication tokens.
-      let cleanUrl = originalUrl;
-      if (cleanUrl.includes('!')) {
-        cleanUrl = cleanUrl.split('!')[0];
+      const text = await response.text();
+      // Basic validation to ensure we got some HTML
+      if (text.includes('<!DOCTYPE html>') || text.includes('<html')) {
+        html = text;
+        break;
+      } else {
+        throw new Error("Invalid HTML content");
       }
+    } catch (err) {
+      console.warn(`HTML Proxy ${i + 1} failed`, err);
+      lastError = err;
+      await delay(500);
+    }
+  }
 
-      return {
-        id: img.fileId || `img_${index}_${Date.now()}`,
-        url: cleanUrl, // High quality, token preserved
-        previewUrl: originalUrl, // Original
-        width: img.width || 1080,
-        height: img.height || 1440,
-        aiName: undefined
-      };
-    });
+  if (!html) {
+    throw lastError || new Error("无法获取笔记页面内容 (所有代理均失败)");
+  }
+
+  // 3. Extract State JSON
+  // Try __INITIAL_STATE__ first, then __INITIAL_SSR_STATE__
+  let stateMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?})(?=;?\s*<\/script>)/);
+  if (!stateMatch) {
+     stateMatch = html.match(/window\.__INITIAL_SSR_STATE__\s*=\s*({[\s\S]*?})(?=;?\s*<\/script>)/);
+  }
+
+  if (!stateMatch) {
+    // Fallback: Try to find JSON in a script tag with id="initial-state" (sometimes used)
+    const scriptMatch = html.match(/<script id="initial-state" type="application\/json">([\s\S]*?)<\/script>/);
+    if (scriptMatch) {
+        stateMatch = scriptMatch; // Reuse variable
+    } else {
+        throw new Error("无法解析帖子数据 (页面结构已变更或被拦截)");
+    }
+  }
+
+  const jsonStr = stateMatch[1].replace(/undefined/g, 'null');
+  
+  let state;
+  try {
+    state = JSON.parse(jsonStr);
+  } catch (e) {
+    console.error("JSON Parse Error", e);
+    throw new Error("帖子数据解析异常");
+  }
+
+  // 4. Locate Note Data (Robust Path Finding)
+  let note = state.note?.note || state.note; // Sometimes it's directly in state.note
+  
+  // Handle noteDetailMap structure
+  if (!note && state.note?.noteDetailMap) {
+     const mapKeys = Object.keys(state.note.noteDetailMap);
+     if (mapKeys.length > 0) {
+       note = state.note.noteDetailMap[mapKeys[0]].note;
+     }
+  }
+
+  // Handle mobile/other structures
+  if (!note && state.data?.note) {
+      note = state.data.note;
+  }
+  
+  // Handle "feed" structure (sometimes seen in explore pages)
+  if (!note && state.feed?.items?.[0]?.note) {
+      note = state.feed.items[0].note;
+  }
+
+  if (!note) {
+    console.log("Parsed State:", state); // Debug log
+    throw new Error("未找到笔记详情数据 (可能需要验证码或登录)");
+  }
+
+  // 5. Process Images
+  const imageList = note.imageList || [];
+  const images: XhsImage[] = imageList.map((img: any, index: number) => {
+    let originalUrl = img.urlDefault || img.url || '';
+    
+    // Standardize HTTPS
+    if (originalUrl.startsWith('http://')) {
+      originalUrl = originalUrl.replace('http://', 'https://');
+    }
+
+    // Clean URL logic
+    let cleanUrl = originalUrl;
+    if (cleanUrl.includes('!')) {
+      cleanUrl = cleanUrl.split('!')[0];
+    }
 
     return {
-      id: note.noteId,
-      title: note.title || note.desc?.slice(0, 50) || '无标题',
-      author: note.user?.nickname || '匿名用户',
-      authorAvatar: note.user?.avatar || '',
-      images: images,
-      timestamp: note.time || Date.now(),
+      id: img.fileId || `img_${index}_${Date.now()}`,
+      url: cleanUrl,
+      previewUrl: originalUrl,
+      width: img.width || 1080,
+      height: img.height || 1440,
+      aiName: undefined
     };
+  });
 
-  } catch (error: any) {
-    console.error("XHS Service Error:", error);
-    const msg = error.message || "解析失败";
-    if (msg.includes("Failed to fetch")) {
-      throw new Error("网络请求被拦截，请稍后重试");
-    }
-    throw error;
-  }
+  return {
+    id: note.noteId || note.id,
+    title: note.title || note.desc?.slice(0, 50) || '无标题',
+    author: note.user?.nickname || '匿名用户',
+    authorAvatar: note.user?.avatar || '',
+    images: images,
+    timestamp: note.time || Date.now(),
+  };
 };
 
 export const cleanXhsUrl = (url: string): string => {
