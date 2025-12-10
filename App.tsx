@@ -209,13 +209,21 @@ const App: React.FC = () => {
         <SearchBar onSearch={handleSearch} isLoading={processing.status === 'analyzing'} />
         
         {processing.status === 'error' && (
-          <div className="text-center text-red-500 mt-4 text-sm font-medium animate-pulse">
-            {processing.message}
+          <div className="max-w-md mx-auto mt-4 px-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+              <p className="text-red-600 text-sm font-medium mb-1">😔 出错了</p>
+              <p className="text-red-500 text-xs">{processing.message}</p>
+              <p className="text-gray-400 text-xs mt-2">
+                💡 提示: 请检查链接是否正确,或打开浏览器控制台查看详细错误信息
+              </p>
+            </div>
           </div>
         )}
         {processing.status === 'success' && (
-          <div className="text-center text-green-500 mt-4 text-sm font-medium">
-            {processing.message}
+          <div className="max-w-md mx-auto mt-4 px-4">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+              <p className="text-green-600 text-sm font-medium">✅ {processing.message}</p>
+            </div>
           </div>
         )}
       </div>
