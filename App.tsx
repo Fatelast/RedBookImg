@@ -112,8 +112,12 @@ const App: React.FC = () => {
     let failCount = 0;
     const imagesToDownload = post.images.filter(img => targetIds.has(img.id));
 
-    // Sequential download
-    for (const img of imagesToDownload) {
+    // 并发下载优化 - 使用并发池控制
+    const MAX_CONCURRENT = 3; // 同时最多3个下载任务
+    const DELAY_BETWEEN_BATCHES = 500; // 每批之间的延迟减少到500ms
+    
+    // 下载单张图片的函数
+    const downloadImage = async (img: XhsImage, index: number) => {
       try {
         let blob: Blob;
         
@@ -147,17 +151,28 @@ const App: React.FC = () => {
         
         successCount++;
         setProcessing(prev => ({ ...prev, progress: successCount + failCount }));
+        console.log(`✅ [${index + 1}/${imagesToDownload.length}] 下载成功:`, fileName);
         
       } catch (e) {
-        console.error("Download failed for image", img.id, e);
+        console.error(`❌ [${index + 1}/${imagesToDownload.length}] 下载失败:`, img.id, e);
         failCount++;
         setFailedIds(prev => new Set(prev).add(img.id));
         setProcessing(prev => ({ ...prev, progress: successCount + failCount }));
       }
+    };
 
-      // Slower delay (1500ms) to reduce proxy rate limiting
-      if (successCount + failCount < imagesToDownload.length) {
-          await new Promise(r => setTimeout(r, 1500));
+    // 并发控制：分批处理
+    for (let i = 0; i < imagesToDownload.length; i += MAX_CONCURRENT) {
+      const batch = imagesToDownload.slice(i, i + MAX_CONCURRENT);
+      
+      // 并行下载当前批次
+      await Promise.all(
+        batch.map((img, batchIndex) => downloadImage(img, i + batchIndex))
+      );
+      
+      // 批次之间添加短暂延迟，避免触发限流
+      if (i + MAX_CONCURRENT < imagesToDownload.length) {
+        await new Promise(r => setTimeout(r, DELAY_BETWEEN_BATCHES));
       }
     }
 

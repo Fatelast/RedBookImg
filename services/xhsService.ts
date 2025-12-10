@@ -66,8 +66,11 @@ export const fetchBlobWithRetry = async (url: string): Promise<Blob> => {
     } catch (err) {
       // console.warn(`Proxy ${i + 1} failed for ${url.substring(0, 30)}...`, err);
       lastError = err;
-      // Progressive delay: wait longer after each failure
-      await delay(1000 + (i * 500)); 
+      // 优化延迟: 减少等待时间以加快下载速度
+      // 第一次失败等300ms，后续每次增加200ms
+      if (i < proxies.length - 1) {
+        await delay(300 + (i * 200)); 
+      }
     }
   }
 
